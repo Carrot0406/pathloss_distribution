@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from multiprocessing import Pool, freeze_support  # 导入freeze_support函数
+from concurrent.futures import ThreadPoolExecutor  # 导入ThreadPoolExecutor类
 
 def read_point_cloud(file_path):
     """读取点云数据"""
@@ -45,35 +45,28 @@ def save_point_cloud(point_cloud, file_path):
             file.write(f"{point[1]}\n")
             file.write(f"{point[2]}\n")
 
-if __name__ == '__main__':
-    freeze_support()  # 添加freeze_support()函数
+def process_file(file):
+    """处理单个文件"""
+    # 读取点云数据
+    points = read_point_cloud(file)
 
-    def process_file(file):
-        """处理单个文件"""
-        # 读取点云数据
-        points = read_point_cloud(file)
+    # 体素网格下采样
+    downsampled_point_cloud = voxel_grid_downsample(points, num_points)
 
-        # 体素网格下采样
-        downsampled_point_cloud = voxel_grid_downsample(points, num_points)
+    # 保存降采样后的点云数据到文件
+    output_path = os.path.join(device_out_path, os.path.basename(file))
+    save_point_cloud(downsampled_point_cloud, output_path)
+    print('Saved {}'.format(output_path))
 
-        # 保存降采样后的点云数据到文件
-        output_path = os.path.join(device_out_path, os.path.basename(file))
-        save_point_cloud(downsampled_point_cloud, output_path)
-        print('Saved {}'.format(output_path))
+base_root = r'E:\PythonProject\car_pl\project\dataset\28GHz\lidar'
+num_points = 2048
+# 其中包含各个设备的子文件夹
+devices = ['Bus3', 'Car5', 'Car7', 'Car9', 'Car10', 'RSF5', 'RSF8']
 
-
-    def parallel_process_files(files):
-        """并行处理文件"""
-        with Pool() as pool:
-            pool.map(process_file, files)
-
-    base_root = r'E:\PythonProject\car_pl\project\dataset\28GHz\lidar'
-    num_points = 2048
-    # 其中包含各个设备的子文件夹
-    devices = ['Bus3', 'Car5', 'Car7', 'Car9', 'Car10', 'RSF5', 'RSF8']
+with ThreadPoolExecutor() as executor:  # 使用ThreadPoolExecutor类创建线程池
     for device in devices:
         path = os.path.join(base_root, device, 'raw')
         device_out_path = os.path.join(base_root, device, 'down_2048')
         os.makedirs(device_out_path, exist_ok=True)
         files = [os.path.join(path, f) for f in os.listdir(path)]
-        parallel_process_files(files)
+        executor.map(process_file, files)
