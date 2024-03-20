@@ -8,3 +8,6 @@
     pl:E:\PythonProject\car_pl\project\dataset\28GHz\pathloss 是已经从wi的raw data处理好的文件
 分布：需要自己处理一下
     在pl的基础上进行，处理成0-250dB 2.5dB为间隔 100个bin
+
+
+
