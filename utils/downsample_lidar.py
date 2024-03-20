@@ -70,3 +70,4 @@ with ThreadPoolExecutor() as executor:  # 使用ThreadPoolExecutor类创建线�
         os.makedirs(device_out_path, exist_ok=True)
         files = [os.path.join(path, f) for f in os.listdir(path)]
         executor.map(process_file, files)
+

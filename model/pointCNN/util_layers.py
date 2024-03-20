@@ -3,7 +3,8 @@ from typing import Callable, Union, Tuple
 
 from util_funcs import UFloatTensor
 
-def EndChannels(f, make_contiguous = False):
+
+def EndChannels(f, make_contiguous=False):
     """ Class decorator to apply 2D convolution along end channels. """
 
     class WrappedLayer(nn.Module):
@@ -13,22 +14,25 @@ def EndChannels(f, make_contiguous = False):
             self.f = f
 
         def forward(self, x):
-            x = x.permute(0,3,1,2)
+            x = x.permute(0, 3, 1, 2)
             x = self.f(x)
-            x = x.permute(0,2,3,1)
+            x = x.permute(0, 2, 3, 1)
             return x
 
     return WrappedLayer()
 
+
 class Dense(nn.Module):
     """
     Single layer perceptron with optional activation, batch normalization, and dropout.
+    单层感知器，具有可选激活、批量规范化和丢弃功能
     """
 
-    def __init__(self, in_features : int, out_features : int,
-                 drop_rate : int = 0, with_bn : bool = True,
-                 activation : Callable[[UFloatTensor], UFloatTensor] = nn.ReLU()
-                ) -> None:
+    def __init__(self, in_features: int, out_features: int,
+                 drop_rate: int = 0, with_bn: bool = True,
+                 activation: Callable[[UFloatTensor], UFloatTensor] = nn.ReLU()
+                 # 这段代码定义了一个变量 activation，它是一个类型为 Callable[[UFloatTensor], UFloatTensor] 的变量，并且将其初始化为 nn.ReLU()。
+                 ) -> None:
         """
         :param in_features: Length of input featuers (last dimension).
         :param out_features: Length of output features (last dimension).
@@ -43,7 +47,7 @@ class Dense(nn.Module):
         # self.bn = LayerNorm(out_channels) if with_bn else None
         self.drop = nn.Dropout(drop_rate) if drop_rate > 0 else None
 
-    def forward(self, x : UFloatTensor) -> UFloatTensor:
+    def forward(self, x: UFloatTensor) -> UFloatTensor:
         """
         :param x: Any input tensor that can be input into nn.Linear.
         :return: Tensor with linear layer and optional activation, batchnorm,
@@ -59,15 +63,18 @@ class Dense(nn.Module):
             x = self.drop(x)
         return x
 
+
 class Conv(nn.Module):
     """
     2D convolutional layer with optional activation and batch normalization.
+    具有可选激活和批量规范化的2D卷积层
     """
 
-    def __init__(self, in_channels : int, out_channels : int,
-                 kernel_size : Union[int, Tuple[int, int]], with_bn : bool = True,
-                 activation : Callable[[UFloatTensor], UFloatTensor] = nn.ReLU()
-                ) -> None:
+    def __init__(self, in_channels: int, out_channels: int,
+                 kernel_size: Union[int, Tuple[int, int]], with_bn: bool = True,
+                 # 类型注释指定了 kernel_size 这个变量可以是整数类型或者是一个包含两个整数的元组类型
+                 activation: Callable[[UFloatTensor], UFloatTensor] = nn.ReLU()
+                 ) -> None:
         """
         :param in_channels: Length of input featuers (first dimension).
         :param out_channels: Length of output features (first dimension).
@@ -77,11 +84,11 @@ class Conv(nn.Module):
         """
         super(Conv, self).__init__()
 
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, bias = not with_bn)
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size, bias=not with_bn)
         self.activation = activation
-        self.bn = nn.BatchNorm2d(out_channels, momentum = 0.9) if with_bn else None
+        self.bn = nn.BatchNorm2d(out_channels, momentum=0.9) if with_bn else None
 
-    def forward(self, x : UFloatTensor) -> UFloatTensor:
+    def forward(self, x: UFloatTensor) -> UFloatTensor:
         """
         :param x: Any input tensor that can be input into nn.Conv2d.
         :return: Tensor with convolutional layer and optional activation and batchnorm applied.
@@ -93,13 +100,16 @@ class Conv(nn.Module):
             x = self.bn(x)
         return x
 
-class SepConv(nn.Module):
-    """ Depthwise separable convolution with optional activation and batch normalization"""
 
-    def __init__(self, in_channels : int, out_channels : int,
-                 kernel_size : Union[int, Tuple[int, int]],
-                 depth_multiplier : int = 1, with_bn : bool = True,
-                 activation : Callable[[UFloatTensor], UFloatTensor] = nn.ReLU()
+class SepConv(nn.Module):
+    """ Depthwise separable convolution with optional activation and batch normalization
+    具有可选激活和批量归一化的深度可分离卷积
+    """
+
+    def __init__(self, in_channels: int, out_channels: int,
+                 kernel_size: Union[int, Tuple[int, int]],
+                 depth_multiplier: int = 1, with_bn: bool = True,
+                 activation: Callable[[UFloatTensor], UFloatTensor] = nn.ReLU()
                  ) -> None:
         """
         :param in_channels: Length of input featuers (first dimension).
@@ -112,14 +122,14 @@ class SepConv(nn.Module):
         super(SepConv, self).__init__()
 
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels * depth_multiplier, kernel_size, groups = in_channels),
-            nn.Conv2d(in_channels * depth_multiplier, out_channels, 1, bias = not with_bn)
+            nn.Conv2d(in_channels, in_channels * depth_multiplier, kernel_size, groups=in_channels),
+            nn.Conv2d(in_channels * depth_multiplier, out_channels, 1, bias=not with_bn)
         )
 
         self.activation = activation
-        self.bn = nn.BatchNorm2d(out_channels, momentum = 0.9) if with_bn else None
+        self.bn = nn.BatchNorm2d(out_channels, momentum=0.9) if with_bn else None
 
-    def forward(self, x : UFloatTensor) -> UFloatTensor:
+    def forward(self, x: UFloatTensor) -> UFloatTensor:
         """
         :param x: Any input tensor that can be input into nn.Conv2d.
         :return: Tensor with depthwise separable convolutional layer and
@@ -132,12 +142,14 @@ class SepConv(nn.Module):
             x = self.bn(x)
         return x
 
+
 class LayerNorm(nn.Module):
     """
     Batch Normalization over ONLY the mini-batch layer (suitable for nn.Linear layers).
+    仅在小批量层上进行batch归一化（适用于nn.Linear层）
     """
 
-    def __init__(self, N : int, dim : int, *args, **kwargs) -> None:
+    def __init__(self, N: int, dim: int, *args, **kwargs) -> None:
         """
         :param N: Batch size.
         :param D: Dimensions.

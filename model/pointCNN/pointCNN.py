@@ -18,18 +18,20 @@ from util_funcs import UFloatTensor, ULongTensor
 from util_layers import Conv, SepConv, Dense, EndChannels
 
 class XConv(nn.Module):
-    """ Convolution over a single point and its neighbors.  """
+    """ Convolution over a single point and its neighbors.
+    定义了一个对单个点及其邻居进行卷积操作的模块
+    """
 
     def __init__(self, C_in : int, C_out : int, dims : int, K : int,
                  P : int, C_mid : int, depth_multiplier : int) -> None:
         """
-        :param C_in: Input dimension of the points' features.
-        :param C_out: Output dimension of the representative point features.
-        :param dims: Spatial dimensionality of points.
-        :param K: Number of neighbors to convolve over.
-        :param P: Number of representative points.
-        :param C_mid: Dimensionality of lifted point features.
-        :param depth_multiplier: Depth multiplier for internal depthwise separable convolution.
+        :param C_in: Input dimension of the points' features.  输入点云特征维度
+        :param C_out: Output dimension of the representative point features. 代表性点的输出特征维度
+        :param dims: Spatial dimensionality of points. 点的空间维度
+        :param K: Number of neighbors to convolve over. 邻居个数
+        :param P: Number of representative points. 选取的特征点的个数
+        :param C_mid: Dimensionality of lifted point features. 提升点特征的维度
+        :param depth_multiplier: Depth multiplier for internal depthwise separable convolution. 用于内部深度可分离卷积的深度乘法器
         """
         super(XConv, self).__init__()
 
@@ -49,7 +51,7 @@ class XConv(nn.Module):
         self.dense1 = Dense(dims, C_mid).cuda()
         self.dense2 = Dense(C_mid, C_mid).cuda()
 
-        # Layers to generate X
+        # Layers to generate X 为了生成X矩阵的层
         self.x_trans = nn.Sequential(
             EndChannels(Conv(
                 in_channels = dims,
@@ -61,6 +63,7 @@ class XConv(nn.Module):
             Dense(K*K, K*K, with_bn = False, activation = None).cuda()
         )
 
+        # 将中心点的特征与邻居点的特征进行拼接
         self.end_conv = EndChannels(SepConv(
             in_channels = C_mid + C_in,
             out_channels = C_out,
@@ -83,6 +86,12 @@ class XConv(nn.Module):
         :return: Features aggregated into point rep_pt.
         """
         rep_pt, pts, fts = x
+        # 输入张量 (rep_pt, pts, fts) 包含了代表性点、区域点云和区域特征
+        '''
+        rep_pt 是代表性点，形状为 (N, P, dims)
+        pts 是区域点云，形状为 (N, P, K, dims)
+        fts 是区域特征，形状为 (N, P, K, C_in)
+        '''
 
         if fts is not None:
             assert(rep_pt.size()[0] == pts.size()[0] == fts.size()[0])  # Check N is equal.
@@ -125,7 +134,9 @@ class XConv(nn.Module):
         return fts_p
 
 class PointCNN(nn.Module):
-    """ Pointwise convolutional model. """
+    """ Pointwise convolutional model.
+     逐点卷积模式
+     """
 
     def __init__(self, C_in : int, C_out : int, dims : int, K : int, D : int, P : int,
                  r_indices_func : Callable[[UFloatTensor,
@@ -147,9 +158,18 @@ class PointCNN(nn.Module):
           K : Number of points for each region.
           D : "Spread" of neighboring points.
 
+        C_in：输入点特征的维度。它表示每个点的特征向量的长度或维度。
+        C_out：代表性点特征的输出维度。这是在进行卷积操作后，每个代表性点的特征向量的长度或维度。
+        dims：点的空间维度。通常，对于 3D 点云数据，这个值是 3，表示点的坐标有三个分量。
+        K：要进行卷积操作的邻居点的数量。对于每个代表性点，将使用其周围的 K 个邻居点进行卷积操作。
+        D：邻居点的 "spread" 或者说 "范围"。在这个上下文中，它可能表示每个代表性点周围的邻居点的范围或距离的限制。这个参数可能用于某些选择邻居点的算法中。
+        P：代表性点的数量。在卷积操作中，将从输入的点云中选取 P 个代表性点进行操作。
+        r_indices_func：选择器函数，用于选择邻居点的函数。这个函数接受代表性点和点云作为输入，然后返回每个代表性点的邻居点的索引。在卷积操作中，邻居点将与每个代表性点一起使用来进行卷积操作。
+
           OUTPUT
           pts_idx : Array of indices into pts such that pts[pts_idx] is the set
           of points in the "region" around rep_pt.
+          pts_idx：指向pts的索引数组，使得pts[pts_idx]是rep_pt周围“区域”中的一组点。
         """
         super(PointCNN, self).__init__()
 
@@ -214,28 +234,56 @@ class PointCNN(nn.Module):
 
         return fts_p
 
+class RandPointCNN(nn.Module):
+    """ PointCNN with randomly subsampled representative points.
+     具有随机子采样代表点的PointCNN
+     """
+
+    def __init__(self, C_in : int, C_out : int, dims : int, K : int, D : int, P : int,
+                 r_indices_func : Callable[[UFloatTensor,  # (N, P, dims)
+                                            UFloatTensor,  # (N, x, dims)
+                                            int, int],
+                                           ULongTensor]    # (N, P, K)
+                ) -> None:
+        """ See documentation for PointCNN. """
+        super(RandPointCNN, self).__init__()
+        self.pointcnn = PointCNN(C_in, C_out, dims, K, D, P, r_indices_func)
+        self.P = P
+
+    def forward(self, x : Tuple[UFloatTensor,  # (N, x, dims)
+                                UFloatTensor]  # (N, x, dims)
+               ) -> Tuple[UFloatTensor,        # (N, P, dims)
+                          UFloatTensor]:       # (N, P, C_out)
+        """
+        Given a point cloud, and its corresponding features, return a new set
+        of randomly-sampled representative points with features projected from
+        the point cloud.
+        :param x: (pts, fts) where
+         - pts: Regional point cloud such that fts[:,p_idx,:] is the
+        feature associated with pts[:,p_idx,:].
+         - fts: Regional features such that pts[:,p_idx,:] is the feature
+        associated with fts[:,p_idx,:].
+        :return: Randomly subsampled points and their features.
+        """
+        pts, fts = x
+        if 0 < self.P < pts.size()[1]:
+            # Select random set of indices of subsampled points.
+            idx = np.random.choice(pts.size()[1], self.P, replace = False).tolist()
+            rep_pts = pts[:,idx,:]
+        else:
+            # All input points are representative points.
+            rep_pts = pts
+        rep_pts_fts = self.pointcnn((rep_pts, pts, fts))
+        return rep_pts, rep_pts_fts
 
 
 
-def knn_indices_func(rep_pts:UFloatTensor,pts: UFloatTensor, k: int,D:int) -> ULongTensor:
-    """
-    使用K最近邻算法确定每个点的邻居索引
-    :param pts: 点云数据张量，形状为 (N, num_points, dims)
-    :param k: 邻居数量
-    :return: 邻居索引张量，形状为 (N, num_points, k)
-    """
-    num_points = pts.size(1)
-    pts_sq = torch.sum(pts**2, dim=-1, keepdim=True)  # 计算点云中每个点的平方和
-    dist = pts_sq + torch.transpose(pts_sq, 1, 2) - 2 * torch.matmul(pts, torch.transpose(pts, 1, 2))  # 计算点之间的距离
-    _, indices = torch.topk(dist, k=k+1, dim=-1, largest=False, sorted=False)  # 使用topk函数获取最近的k个邻居索引
-    indices = indices[:, :, 1:]  # 去除每个点本身
-    return indices.cuda()
 
 
 if __name__ == '__main__':
+    from util_funcs import knn_indices_func_gpu
     # 创建一个 PointCNN 实例
-    point_cnn = PointCNN(C_in=3, C_out=64, dims=3, K=16, D=1, P=2048, r_indices_func=knn_indices_func)
-
+    point_cnn = RandPointCNN(0,64,3,16,16,200,knn_indices_func_gpu)
     # 假设 pts 和 fts 是点云数据
     # pts 是点的坐标信息，fts 是点的特征信息
 
@@ -248,7 +296,7 @@ if __name__ == '__main__':
 
 
     # 将点云数据传递给 PointCNN 的前向方法
-    rep_pts_fts = point_cnn((pts,pts, pts))
+    rep_pts,rep_pts_fts =point_cnn((pts,None))
 
     # rep_pts 是新的代表性点集
     # rep_pts_fts 是从原始点云中投影而来的特征
