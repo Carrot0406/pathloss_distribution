@@ -51,10 +51,10 @@ if __name__ == '__main__':
     import torch
 
     # 创建UNet模型
-    model = UNet(n_channels=3, n_classes=2)
+    model = UNet(n_channels=3, n_classes=3)
 
     # 创建一个随机输入张量
-    input_tensor = torch.randn(1, 3, 256, 256)  # 假设输入图片大小为256x256，通道数为3
+    input_tensor = torch.randn(1, 3, 1920, 1080)  # 假设输入图片大小为256x256，通道数为3
 
     # 执行前向传播
     output = model(input_tensor)

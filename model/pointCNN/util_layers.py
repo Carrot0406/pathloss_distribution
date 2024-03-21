@@ -54,6 +54,7 @@ class Dense(nn.Module):
         and dropout applied.
         """
         x = x.cuda()
+        self.linear = self.linear.cuda()
         x = self.linear(x)
         if self.activation:
             x = self.activation(x)
